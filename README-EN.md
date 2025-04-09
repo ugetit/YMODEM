@@ -1,7 +1,7 @@
 # YMODEM Protocol Implementation
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-
+**Read this in other languages: [English](README-EN.md), [中文](README-CN.md).**
 ## Overview
 
 This is a portable YMODEM protocol implementation in C, designed for embedded systems and inspired by [RT-Thread](https://www.rt-thread.org/). The implementation is highly configurable, has minimal dependencies, and supports both sending and receiving files.

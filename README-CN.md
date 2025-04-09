@@ -1,7 +1,7 @@
 # YMODEM 协议实现
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-
+**其他语言版本: [English](README-EN.md), [中文](README-CN.md).**
 ## 概述
 
 这是一个用 C 语言实现的可移植 YMODEM 协议，专为嵌入式系统设计，受 [RT-Thread](https://www.rt-thread.org/) 启发。该实现高度可配置，依赖极少，同时支持文件发送和接收功能。
