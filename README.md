@@ -31,20 +31,23 @@ The YMODEM implementation is divided into three main components:
 
 ```
 ymodem/
-├── ymodem_common.c      # Common utility functions
-├── ymodem_common.h      # Common definitions and data structures
-├── ymodem_send.c        # Sender implementation
-├── ymodem_send.h        # Sender API
-├── ymodem_receive.c     # Receiver implementation
-├── ymodem_receive.h     # Receiver API
 ├── examples/
-│   ├── send_file.c      # Example for sending files
-│   └── rec_file.c       # Example for receiving files
-└── README.md            # This file
+│   └── demo.c       # demo
+├── include/
+│   ├── ymodem_common.h      # Common utility functions
+│   ├── ymodem_send.h        # Sender API
+│   └── ymodem_receive.h     # Receiver API
+├── src/
+│   ├── ymodem_common.c      # Common definitions and data structures
+│   ├── ymodem_send.c        # Sender implementation
+│   └── ymodem_receive.c     # Receiver implementation
+├── Makefile
+└── README.md                # this file
 ```
 
 ## Usage
 
+Note: If you don't need to debug, you should disable the macro definition "DYMODEM_DEBUG_ENABLE"!!!!
 ### Initialize Callbacks
 
 First, you need to initialize the callback functions to interface with your hardware and file system:
@@ -149,6 +152,8 @@ YMODEM_ERR_ACK   = -7  // Wrong answer, wrong ACK or C
 YMODEM_ERR_FILE  = -8  // File operation error
 YMODEM_ERR_MEM   = -9  // Memory allocation error
 ```
+## TEST RESULTS
+![alt text](image.png)
 
 ## Porting Guide
 

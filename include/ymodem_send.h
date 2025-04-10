@@ -27,7 +27,9 @@ extern "C" {
 int ymodem_send_init(ymodem_context_t* ctx, 
                     const ymodem_callbacks_t* callbacks,
                     uint8_t* buffer,
-                    size_t buffer_size);
+                    size_t buffer_size,
+                    uint8_t* send_buffer,
+                    size_t send_buffer_size);
 
 /**
  * @brief Send a file via YMODEM protocol

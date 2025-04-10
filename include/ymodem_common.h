@@ -13,6 +13,17 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdio.h>
+
+/* Debug switch - set to 1 to enable debug output, 0 to disable */
+#define YMODEM_DEBUG_ENABLE 1
+
+/* Debug print macros */
+#if YMODEM_DEBUG_ENABLE
+    #define YMODEM_DEBUG_PRINT(format, ...) printf("[YMODEM] " format, ##__VA_ARGS__)
+#else
+    #define YMODEM_DEBUG_PRINT(format, ...) do {} while(0)
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -98,9 +109,9 @@ typedef size_t (*ymodem_file_write_func)(void* file_handle, const uint8_t* buffe
 typedef void (*ymodem_file_close_func)(void* file_handle);
 typedef int (*ymodem_file_size_func)(void* file_handle);
 
-/* Communication callbacks */
-typedef bool (*ymodem_comm_send_func)(uint8_t data);
-typedef int (*ymodem_comm_receive_func)(uint8_t* data, uint32_t timeout_ms);
+/* Communication callbacks - modified for multi-byte operations */
+typedef size_t (*ymodem_comm_send_func)(const uint8_t* data, size_t length);
+typedef size_t (*ymodem_comm_receive_func)(uint8_t* data, size_t max_length, uint32_t timeout_ms);
 
 /* Timing callbacks */
 typedef uint32_t (*ymodem_get_time_ms_func)(void);
@@ -130,6 +141,8 @@ typedef struct {
     enum ymodem_stage  stage;            /* Current transmission stage */
     uint8_t*           buffer;           /* Data buffer */
     size_t             buffer_size;      /* Buffer size */
+    uint8_t*           send_buffer;      /* Send Data buffer */
+    size_t             send_buffer_size; /* Send Buffer size */
     void*              file_handle;      /* Current file handle */
     int                file_size;        /* Current file size */
     char               filename[YMODEM_MAX_FILENAME_LENGTH]; /* Current filename */
@@ -137,9 +150,16 @@ typedef struct {
     uint8_t            error_count;      /* Error counter */
 } ymodem_context_t;
 
+/* Debug helper functions */
+const char* ymodem_code_to_str(enum ymodem_code code);
+const char* ymodem_error_to_str(enum ymodem_error error);
+const char* ymodem_stage_to_str(enum ymodem_stage stage);
+
 /* Common helper functions */
 uint16_t ymodem_calc_crc16(const uint8_t* buffer, size_t size);
 const char* ymodem_get_path_basename(const char* path);
+size_t ymodem_send_bytes(ymodem_context_t* ctx, const uint8_t* data, size_t length);
+size_t ymodem_receive_bytes(ymodem_context_t* ctx, uint8_t* data, size_t length, uint32_t timeout_ms);
 bool ymodem_send_byte(ymodem_context_t* ctx, uint8_t data);
 int ymodem_receive_byte(ymodem_context_t* ctx, uint32_t timeout_ms);
 

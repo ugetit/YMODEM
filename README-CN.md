@@ -31,19 +31,23 @@ YMODEM 实现分为三个主要组件：
 
 ```
 ymodem/
-├── ymodem_common.c      # 公共工具函数
-├── ymodem_common.h      # 公共定义和数据结构
-├── ymodem_send.c        # 发送器实现
-├── ymodem_send.h        # 发送器 API
-├── ymodem_receive.c     # 接收器实现
-├── ymodem_receive.h     # 接收器 API
 ├── examples/
-│   ├── send_file.c      # 发送文件示例
-│   └── rec_file.c       # 接收文件示例
+│   └── demo.c       # 接收文件示例
+├── include/
+│   ├── ymodem_common.h      # 公共工具函数
+│   ├── ymodem_send.h        # 发送器实现
+│   └── ymodem_receive.h     # 接收器实现
+├── src/
+│   ├── ymodem_common.c      # 公共工具函数
+│   ├── ymodem_send.c        # 发送器实现
+│   └── ymodem_receive.c     # 接收器实现
+├── Makefile
 └── README.md            # 本文件
 ```
 
 ## 使用方法
+
+注意：如果不需要调试修改，你应该把“DYMODEM_DEBUG_ENABLE”宏定义失能！！！
 
 ### 初始化回调函数
 
@@ -149,6 +153,9 @@ YMODEM_ERR_ACK   = -7  // 错误的应答，错误的 ACK 或 C
 YMODEM_ERR_FILE  = -8  // 文件操作错误
 YMODEM_ERR_MEM   = -9  // 内存分配错误
 ```
+
+## 测试结果
+![alt text](image.png)
 
 ## 移植指南
 

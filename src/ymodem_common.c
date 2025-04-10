@@ -46,6 +46,60 @@ static const uint16_t crc16_ccitt_table[256] = {
 };
 
 /**
+ * @brief Convert YMODEM code to string representation for debugging
+ */
+const char* ymodem_code_to_str(enum ymodem_code code)
+{
+    switch (code) {
+        case YMODEM_CODE_NONE: return "NONE";
+        case YMODEM_CODE_SOH: return "SOH";
+        case YMODEM_CODE_STX: return "STX";
+        case YMODEM_CODE_EOT: return "EOT";
+        case YMODEM_CODE_ACK: return "ACK";
+        case YMODEM_CODE_NAK: return "NAK";
+        case YMODEM_CODE_CAN: return "CAN";
+        case YMODEM_CODE_C: return "C";
+        default: return "UNKNOWN";
+    }
+}
+
+/**
+ * @brief Convert YMODEM error code to string representation for debugging
+ */
+const char* ymodem_error_to_str(enum ymodem_error error)
+{
+    switch (error) {
+        case YMODEM_ERR_NONE: return "NO_ERROR";
+        case YMODEM_ERR_TMO: return "TIMEOUT";
+        case YMODEM_ERR_CODE: return "WRONG_CODE";
+        case YMODEM_ERR_SEQ: return "WRONG_SEQUENCE";
+        case YMODEM_ERR_CRC: return "CRC_ERROR";
+        case YMODEM_ERR_DSZ: return "DATA_SIZE_ERROR";
+        case YMODEM_ERR_CAN: return "CANCELLED";
+        case YMODEM_ERR_ACK: return "ACK_ERROR";
+        case YMODEM_ERR_FILE: return "FILE_ERROR";
+        case YMODEM_ERR_MEM: return "MEMORY_ERROR";
+        default: return "UNKNOWN_ERROR";
+    }
+}
+
+/**
+ * @brief Convert YMODEM stage to string representation for debugging
+ */
+const char* ymodem_stage_to_str(enum ymodem_stage stage)
+{
+    switch (stage) {
+        case YMODEM_STAGE_NONE: return "NONE";
+        case YMODEM_STAGE_ESTABLISHING: return "ESTABLISHING";
+        case YMODEM_STAGE_ESTABLISHED: return "ESTABLISHED";
+        case YMODEM_STAGE_TRANSMITTING: return "TRANSMITTING";
+        case YMODEM_STAGE_FINISHING: return "FINISHING";
+        case YMODEM_STAGE_FINISHED: return "FINISHED";
+        default: return "UNKNOWN";
+    }
+}
+
+/**
  * @brief Calculate CRC16 CCITT for a buffer
  * 
  * @param buffer Buffer to calculate CRC for
@@ -90,7 +144,41 @@ const char* ymodem_get_path_basename(const char* path)
 }
 
 /**
- * @brief Send a byte using the registered callback
+ * @brief Send bytes using the registered callback
+ * 
+ * @param ctx YMODEM context
+ * @param data Buffer containing bytes to send
+ * @param length Number of bytes to send
+ * @return size_t Number of bytes sent, 0 on failure
+ */
+size_t ymodem_send_bytes(ymodem_context_t* ctx, const uint8_t* data, size_t length)
+{
+    if (ctx->callbacks.comm_send == NULL) {
+        YMODEM_DEBUG_PRINT("Send failed: comm_send callback is NULL\n");
+        return 0;
+    }
+    
+    size_t sent = ctx->callbacks.comm_send(data, length);
+    
+    // 添加调试输出 - 只打印前几个字节避免大量输出
+    if (sent > 0) {
+        YMODEM_DEBUG_PRINT("Sent %zu bytes: ", sent);
+        for (size_t i = 0; i < (sent > 8 ? 8 : sent); i++) {
+            YMODEM_DEBUG_PRINT("%02X ", data[i]);
+        }
+        if (sent > 8) {
+            YMODEM_DEBUG_PRINT("...");
+        }
+        YMODEM_DEBUG_PRINT("\n");
+    } else {
+        YMODEM_DEBUG_PRINT("Failed to send data (sent 0 bytes)\n");
+    }
+    
+    return sent;
+}
+
+/**
+ * @brief Send a single byte using the registered callback
  * 
  * @param ctx YMODEM context
  * @param data Byte to send
@@ -98,32 +186,82 @@ const char* ymodem_get_path_basename(const char* path)
  */
 bool ymodem_send_byte(ymodem_context_t* ctx, uint8_t data)
 {
-    if (ctx->callbacks.comm_send == NULL) {
-        return false;
+    bool result = (ymodem_send_bytes(ctx, &data, 1) == 1);
+    if (result) {
+        if (data >= 32 && data <= 126) {
+            YMODEM_DEBUG_PRINT("Sent byte: 0x%02X ('%c') [%s]\n", data, data, ymodem_code_to_str(data));
+        } else {
+            YMODEM_DEBUG_PRINT("Sent byte: 0x%02X [%s]\n", data, ymodem_code_to_str(data));
+        }
+    } else {
+        YMODEM_DEBUG_PRINT("Failed to send byte: 0x%02X\n", data);
     }
-    
-    return ctx->callbacks.comm_send(data);
+    return result;
 }
 
 /**
- * @brief Receive a byte using the registered callback
+ * @brief Receive bytes using the registered callback
+ * 
+ * @param ctx YMODEM context
+ * @param data Buffer to store received bytes
+ * @param length Maximum number of bytes to receive
+ * @param timeout_ms Timeout in milliseconds
+ * @return size_t Number of bytes received, 0 on timeout or error
+ */
+size_t ymodem_receive_bytes(ymodem_context_t* ctx, uint8_t* data, size_t length, uint32_t timeout_ms)
+{
+    if (ctx->callbacks.comm_receive == NULL) {
+        YMODEM_DEBUG_PRINT("Receive failed: comm_receive callback is NULL\n");
+        return 0;
+    }
+    
+    YMODEM_DEBUG_PRINT("Waiting to receive up to %zu bytes (timeout %u ms)...\n", length, timeout_ms);
+    size_t received = ctx->callbacks.comm_receive(data, length, timeout_ms);
+    
+    if (received > 0) {
+        YMODEM_DEBUG_PRINT("Received %zu bytes: ", received);
+        for (size_t i = 0; i < (received > 8 ? 8 : received); i++) {
+            YMODEM_DEBUG_PRINT("%02X ", data[i]);
+        }
+        if (received > 8) {
+            YMODEM_DEBUG_PRINT("...");
+        }
+        YMODEM_DEBUG_PRINT("\n");
+    } else {
+        YMODEM_DEBUG_PRINT("Receive timeout or error (received 0 bytes)\n");
+    }
+    
+    return received;
+}
+
+/**
+ * @brief Receive a single byte using the registered callback
  * 
  * @param ctx YMODEM context
  * @param timeout_ms Timeout in milliseconds
- * @return int Received byte (0-255) or negative error code
+ * @return int Received byte (0-255) or negative error code on failure
  */
 int ymodem_receive_byte(ymodem_context_t* ctx, uint32_t timeout_ms)
 {
     uint8_t data;
-    int result;
+    size_t received;
     
     if (ctx->callbacks.comm_receive == NULL) {
+        YMODEM_DEBUG_PRINT("Receive byte failed: comm_receive callback is NULL\n");
         return YMODEM_ERR_CODE;
     }
     
-    result = ctx->callbacks.comm_receive(&data, timeout_ms);
-    if (result < 0) {
-        return result;
+    YMODEM_DEBUG_PRINT("Waiting for single byte (timeout %u ms)...\n", timeout_ms);
+    received = ymodem_receive_bytes(ctx, &data, 1, timeout_ms);
+    if (received == 0) {
+        YMODEM_DEBUG_PRINT("Byte receive timeout\n");
+        return YMODEM_ERR_TMO;  /* Timeout */
+    }
+    
+    if (data >= 32 && data <= 126) {
+        YMODEM_DEBUG_PRINT("Received byte: 0x%02X ('%c') [%s]\n", data, data, ymodem_code_to_str(data));
+    } else {
+        YMODEM_DEBUG_PRINT("Received byte: 0x%02X [%s]\n", data, ymodem_code_to_str(data));
     }
     
     return data;
