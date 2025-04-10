@@ -290,6 +290,103 @@ static int _ymodem_receive_packet(ymodem_context_t* ctx, uint8_t* seq, size_t* d
 /**
  * @brief Main data transfer loop
  */
+// static int _ymodem_do_trans(ymodem_context_t* ctx)
+// {
+//     int ret;
+//     enum ymodem_code code;
+//     uint8_t seq;
+//     size_t data_size;
+//     uint8_t expected_seq = 1; /* We expect packet 1 after packet 0 */
+    
+//     ctx->stage = YMODEM_STAGE_TRANSMITTING;
+//     ctx->error_count = 0;
+    
+//     while (1) {
+//         /* Wait for SOH/STX/EOT */
+//         ret = ymodem_receive_byte(ctx, YMODEM_WAIT_PACKET_TIMEOUT_MS);
+//         if (ret < 0) {
+//             return YMODEM_ERR_TMO;
+//         }
+        
+//         code = ret;
+//         ctx->buffer[0] = (uint8_t)code;
+        
+//         /* Check for end of transmission */
+//         if (code == YMODEM_CODE_EOT) {
+//             return YMODEM_ERR_NONE;
+//         }
+        
+//         /* Check for valid packet start */
+//         if (code != YMODEM_CODE_SOH && code != YMODEM_CODE_STX) {
+//             ctx->error_count++;
+//             if (ctx->error_count > YMODEM_MAX_ERRORS) {
+//                 return YMODEM_ERR_CODE;
+//             }
+            
+//             /* Request retransmission */
+//             if (!ymodem_send_byte(ctx, YMODEM_CODE_NAK)) {
+//                 return YMODEM_ERR_CODE;
+//             }
+//             continue;
+//         }
+        
+//         /* Receive the rest of the packet */
+//         ret = _ymodem_receive_packet(ctx, &seq, &data_size);
+//         if (ret != YMODEM_ERR_NONE) {
+//             ctx->error_count++;
+//             if (ctx->error_count > YMODEM_MAX_ERRORS) {
+//                 return ret;
+//             }
+            
+//             /* Request retransmission */
+//             if (!ymodem_send_byte(ctx, YMODEM_CODE_NAK)) {
+//                 return YMODEM_ERR_CODE;
+//             }
+//             continue;
+//         }
+//         YMODEM_DEBUG_PRINT("Received packet with sequence #%d (expected #%d)\n", 
+//                   seq, expected_seq);
+//         /* Check sequence number */
+//         if (seq != expected_seq) {
+//             ctx->error_count++;
+//             if (ctx->error_count > YMODEM_MAX_ERRORS) {
+//                 return YMODEM_ERR_SEQ; // 使用序列号错误的专用错误码
+//             }
+//             /* Out of sequence packet - possible duplicate or missed packet */
+//             if (!ymodem_send_byte(ctx, YMODEM_CODE_NAK)) {
+//                 return YMODEM_ERR_CODE;
+//             }
+//             continue;
+//         }
+
+                
+//         /* Reset error counter on successful packet */
+//         ctx->error_count = 0;
+        
+//         /* Process packet data */
+//         if (ctx->file_handle != NULL) {
+//             /* Write data to file */
+//             size_t written = ctx->callbacks.file_write(
+//                 ctx->file_handle, 
+//                 ctx->buffer + 3, /* Skip SOH/STX + seq + ~seq */
+//                 data_size
+//             );
+//             YMODEM_DEBUG_PRINT("Wrote %zu bytes to file\n", written);
+//             if (written != data_size) {
+//                 return YMODEM_ERR_FILE;
+//             }
+//         }
+        
+//         /* ACK the packet */
+//         if (!ymodem_send_byte(ctx, YMODEM_CODE_ACK)) {
+//             return YMODEM_ERR_CODE;
+//         }
+        
+//         /* Increment sequence number for next packet */
+//         expected_seq = (expected_seq + 1) & 0xFF;
+//     }
+// }
+
 static int _ymodem_do_trans(ymodem_context_t* ctx)
 {
     int ret;
@@ -297,6 +394,7 @@ static int _ymodem_do_trans(ymodem_context_t* ctx)
     uint8_t seq;
     size_t data_size;
     uint8_t expected_seq = 1; /* We expect packet 1 after packet 0 */
+    size_t total_received = 0; /* 累计已接收的有效字节数 */
     
     ctx->stage = YMODEM_STAGE_TRANSMITTING;
     ctx->error_count = 0;
@@ -344,13 +442,12 @@ static int _ymodem_do_trans(ymodem_context_t* ctx)
             }
             continue;
         }
-        YMODEM_DEBUG_PRINT("Received packet with sequence #%d (expected #%d)\n", 
-                  seq, expected_seq);
+        
         /* Check sequence number */
         if (seq != expected_seq) {
             ctx->error_count++;
             if (ctx->error_count > YMODEM_MAX_ERRORS) {
-                return YMODEM_ERR_SEQ; // 使用序列号错误的专用错误码
+                return YMODEM_ERR_SEQ;
             }
             /* Out of sequence packet - possible duplicate or missed packet */
             if (!ymodem_send_byte(ctx, YMODEM_CODE_NAK)) {
@@ -358,23 +455,39 @@ static int _ymodem_do_trans(ymodem_context_t* ctx)
             }
             continue;
         }
-
                 
         /* Reset error counter on successful packet */
         ctx->error_count = 0;
         
         /* Process packet data */
         if (ctx->file_handle != NULL) {
+            size_t bytes_to_write = data_size;
+            
+            /* 只在文件大小已知，且本次写入可能超过总大小时处理 */
+            if (ctx->file_size > 0) {
+                /* 检查这是否是最后一帧数据 */
+                if (total_received + data_size >= ctx->file_size) {
+                    /* 这是最后一帧，只写入需要的字节数 */
+                    bytes_to_write = ctx->file_size - total_received;
+                    YMODEM_DEBUG_PRINT("Last packet: writing only %zu of %zu bytes\n", 
+                                      bytes_to_write, data_size);
+                }
+            }
+            
             /* Write data to file */
             size_t written = ctx->callbacks.file_write(
                 ctx->file_handle, 
                 ctx->buffer + 3, /* Skip SOH/STX + seq + ~seq */
-                data_size
+                bytes_to_write
             );
+            
             YMODEM_DEBUG_PRINT("Wrote %zu bytes to file\n", written);
-            if (written != data_size) {
+            if (written != bytes_to_write) {
                 return YMODEM_ERR_FILE;
             }
+            
+            /* 更新已接收字节计数 */
+            total_received += written;
         }
         
         /* ACK the packet */
